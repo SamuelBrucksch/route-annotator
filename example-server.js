@@ -11,20 +11,13 @@ function main() {
   if (argc < 2) return console.error(`Usage: ${__filename} OSMFILE [TAG FILE]`);
 
   const osmFile = argv[1];
-  const tagFile = argv[2] || "";
+  const tagFile = argv[2] || "./tags";
   const port = process.env.ANNOTATOR_PORT || 5052;
-
-  const app = express();
-
-  app.use((req, res, next) => {
-    console.log(`${req.method}  ${req.url}  ${req.headers["user-agent"]}`);
-    next();
-  });
 
   const annotator = new bindings.Annotator();
 
-  app.get("/coordlist/:coordlist", coordListHandler(annotator));
-  app.get("/nodelist/:nodelist", nodeListHandler(annotator));
+  const app = express();
+  app.use(express.json());
   app.post("/nodelist", nodeListHandler(annotator));
   app.post("/coordlist", coordListHandler(annotator));
 
@@ -32,22 +25,20 @@ function main() {
     if (err) return console.error(err);
 
     app.listen(port, () => {
-      console.log(`Listening on 0.0.0.0:${port}`);
+      console.log(`Listening on http://localhost:${port}`);
     });
   });
 }
 
-function nodeListHandler(annotator) {
+const nodeListHandler = (annotator) => {
   return (req, res) => {
     const startTime = Date.now();
     let nodes;
-    if (req.body?.nodes) {
-      // POST
+    if (req.body.nodes) {
       // should be an array of numbers
       nodes = req.body.nodes;
     } else {
-      // GET
-      nodes = req.params.nodelist.split(",").map((x) => parseInt(x, 10));
+      return res.sendStatus(400);
     }
 
     const invalid = (x) => !isFinite(x) || x === null;
@@ -85,18 +76,15 @@ function nodeListHandler(annotator) {
   };
 }
 
-function coordListHandler(annotator) {
+const coordListHandler = (annotator) => {
   return (req, res) => {
     let coordinates;
-    if (req.body?.coordinates) {
+    if (req.body.coordinates) {
       // POST
       // should be an array with arrays of lon/lat pairs
       coordinates = req.body.coordinates;
     } else {
-      // GET
-      coordinates = req.params.coordlist
-        .split(";")
-        .map((lonLat) => lonLat.split(",").map((x) => parseFloat(x)));
+      return res.sendStatus(400);
     }
 
     const invalid = (x) => !isFinite(x) || x === null;
