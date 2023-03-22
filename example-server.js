@@ -12,14 +12,13 @@ function main() {
 
   const osmFile = argv[1];
   const tagFile = argv[2] || "./tags";
-  const port = process.env.ANNOTATOR_PORT || 5052;
+  const port = process.env.ANNOTATOR_PORT || 5055;
 
   const annotator = new bindings.Annotator();
 
   const app = express();
-  app.use(express.json());
+  app.use(express.json({limit: '5mb'}));
   app.post("/nodelist", nodeListHandler(annotator));
-  app.post("/coordlist", coordListHandler(annotator));
 
   annotator.loadOSMExtract(osmFile, tagFile, (err) => {
     if (err) return console.error(err);
@@ -48,74 +47,24 @@ const nodeListHandler = (annotator) => {
     annotator.annotateRouteFromNodeIds(nodes, (err, wayIds) => {
       if (err) return res.sendStatus(400);
 
-      const response = { way_indexes: [], ways_seen: [] };
-      const way_indexes = {};
-
+      const tags = []
       async.each(
         wayIds,
         (way_id, next) => {
-          if (way_id === null) return next();
-          annotator.getAllTagsForWayId(way_id, (err, tags) => {
+          if (way_id === null) {
+            tags.push(null)
+            return next();
+          }
+          annotator.getAllTagsForWayId(way_id, (err, tagsForWay) => {
             if (err) res.sendStatus(400);
-            const wid = tags["_way_id"];
-            if (!way_indexes.hasOwnProperty(wid)) {
-              way_indexes[wid] = Object.keys(way_indexes).length;
-              response.ways_seen.push(tags);
-            }
-            response.way_indexes.push(way_indexes[wid]);
+            tags.push([tagsForWay.maxspeed ?? null, tagsForWay["maxspeed:conditional"] ?? null, tagsForWay.tunnel ? 1 : 0, tagsForWay.bridge ? 1 : 0])
             next();
           });
         },
         (err, data) => {
           const endTime = Date.now() - startTime;
           console.log("Request took", endTime, "ms")
-          res.json(response);
-        }
-      );
-    });
-  };
-}
-
-const coordListHandler = (annotator) => {
-  return (req, res) => {
-    let coordinates;
-    if (req.body.coordinates) {
-      // POST
-      // should be an array with arrays of lon/lat pairs
-      coordinates = req.body.coordinates;
-    } else {
-      return res.sendStatus(400);
-    }
-
-    const invalid = (x) => !isFinite(x) || x === null;
-
-    if (coordinates.some((lonLat) => lonLat.some(invalid)))
-      return res.sendStatus(400);
-
-    annotator.annotateRouteFromLonLats(coordinates, (err, wayIds) => {
-      if (err) {
-        console.error(err);
-        return res.sendStatus(400);
-      }
-
-      const response = { way_indexes: [], ways_seen: [] };
-      const way_indexes = {};
-
-      async.each(
-        wayIds,
-        (way_id, next) => {
-          annotator.getAllTagsForWayId(way_id, (err, tags) => {
-            const wid = tags["_way_id"];
-            if (!way_indexes.hasOwnProperty(wid)) {
-              way_indexes[wid] = Object.keys(way_indexes).length;
-              response.ways_seen.push(tags);
-            }
-            response.way_indexes.push(way_indexes[wid]);
-            next();
-          });
-        },
-        (err, data) => {
-          res.json(response);
+          res.json(tags);
         }
       );
     });
