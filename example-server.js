@@ -39,9 +39,11 @@ function main() {
 
 function nodeListHandler(annotator) {
   return (req, res) => {
+    const startTime = Date.now();
     let nodes;
     if (req.body?.nodes) {
       // POST
+      // should be an array of numbers
       nodes = req.body.nodes;
     } else {
       // GET
@@ -55,8 +57,8 @@ function nodeListHandler(annotator) {
     annotator.annotateRouteFromNodeIds(nodes, (err, wayIds) => {
       if (err) return res.sendStatus(400);
 
-      var response = { way_indexes: [], ways_seen: [] };
-      var way_indexes = {};
+      const response = { way_indexes: [], ways_seen: [] };
+      const way_indexes = {};
 
       async.each(
         wayIds,
@@ -64,8 +66,8 @@ function nodeListHandler(annotator) {
           if (way_id === null) return next();
           annotator.getAllTagsForWayId(way_id, (err, tags) => {
             if (err) res.sendStatus(400);
-            var wid = tags["_way_id"];
-            if (!("wid" in way_indexes)) {
+            const wid = tags["_way_id"];
+            if (!way_indexes.hasOwnProperty(wid)) {
               way_indexes[wid] = Object.keys(way_indexes).length;
               response.ways_seen.push(tags);
             }
@@ -74,6 +76,8 @@ function nodeListHandler(annotator) {
           });
         },
         (err, data) => {
+          const endTime = Date.now() - startTime;
+          console.log("Request took", endTime, "ms")
           res.json(response);
         }
       );
@@ -86,6 +90,7 @@ function coordListHandler(annotator) {
     let coordinates;
     if (req.body?.coordinates) {
       // POST
+      // should be an array with arrays of lon/lat pairs
       coordinates = req.body.coordinates;
     } else {
       // GET
@@ -105,14 +110,14 @@ function coordListHandler(annotator) {
         return res.sendStatus(400);
       }
 
-      var response = { way_indexes: [], ways_seen: [] };
-      var way_indexes = {};
+      const response = { way_indexes: [], ways_seen: [] };
+      const way_indexes = {};
 
       async.each(
         wayIds,
         (way_id, next) => {
           annotator.getAllTagsForWayId(way_id, (err, tags) => {
-            var wid = tags["_way_id"];
+            const wid = tags["_way_id"];
             if (!way_indexes.hasOwnProperty(wid)) {
               way_indexes[wid] = Object.keys(way_indexes).length;
               response.ways_seen.push(tags);
